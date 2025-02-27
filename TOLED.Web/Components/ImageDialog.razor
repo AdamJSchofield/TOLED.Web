@@ -1,0 +1,324 @@
+﻿@using SixLabors.ImageSharp.Processing
+@using SixLabors.ImageSharp.Processing.Processors.Dithering
+@using ResizeOptions = SixLabors.ImageSharp.Processing.ResizeOptions;
+@using ResizeMode = SixLabors.ImageSharp.Processing.ResizeMode;
+@using TOLED.Web.Forms;
+@using TOLED.Web.Services;
+@using TOLED.Web.Data.Models;
+@using TOLED.Web.Components
+
+@inject IImageService ImageService
+@inject ISnackbar Snackbar
+
+<MudForm Model="@model" @ref="@form" Validation="@(ValidationRules.ValidateValue)" ValidationDelay="0">
+    <MudDialog>
+        <TitleContent>
+        </TitleContent>
+        <DialogContent>
+            <MudPaper>
+
+                <MudGrid Class="pa-6">
+                    <MudItem xs="9">
+                        <MudStack>
+                            <MudItem xs="9">
+                                <MudTextField Placeholder=@($"Enter a name")
+                                @bind-Value="@model.Name"
+                                For="@(() => model.Name)"
+                                Immediate="true"
+                                Typo="Typo.h6" />
+                            </MudItem>
+                            <MudItem xs="9">
+                                <MudStack Justify="Justify.SpaceEvenly" Row="true">
+                                    <MudSwitch @bind-Value="_showAdvanced" Color="Color.Primary" Label="Show Options"></MudSwitch>
+                                    <MudSwitch @bind-Value="_showPreviews" Color="Color.Primary" Label="Show Previews"></MudSwitch>
+                                </MudStack>
+                            </MudItem>
+                        </MudStack>
+                    </MudItem>
+                    <MudItem xs="3">
+                        <MudFileUpload @ref="@_fileUpload"
+                        Accept=".bmp, .png, .jpg, .gif"
+                        T="IBrowserFile"
+                        For="@(() => model.File)"
+                        @bind-Files="model.File"
+                        OnFilesChanged="OnUploadImage"
+                        SuppressOnChangeWhenInvalid="true">
+                            <ActivatorContent>
+                                <MudButton Variant="Variant.Filled"
+                                Color="Color.Primary"
+                                StartIcon="@Icons.Material.Filled.CloudUpload"
+                                Class="d-flex align-center justify-center mud-width-full py-8">
+                                </MudButton>
+                            </ActivatorContent>
+                        </MudFileUpload>
+                    </MudItem>
+                    @if (model.File != null)
+                    {
+                        <MudItem xs="12">
+                            <MudText>File Uploaded: @(model.File.Name)</MudText>
+                        </MudItem>
+                    }
+                </MudGrid>
+                <MudGrid>
+                    @if(_showAdvanced)
+                    {
+                        <MudItem xs="12">
+                            <MudDivider></MudDivider>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudText>Resize Method</MudText>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudToggleGroup T="ResizeMode" Value="@model.MutateOptions.Mode" SelectionMode="SelectionMode.SingleSelection" ValueChanged="OnResizeModeChanged" Color="Color.Primary" FixedContent>
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.ResizeMode.Pad" Text="@SixLabors.ImageSharp.Processing.ResizeMode.Pad.ToString()" />
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.ResizeMode.Crop" Text="@SixLabors.ImageSharp.Processing.ResizeMode.Crop.ToString()" />
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.ResizeMode.Stretch" Text="@SixLabors.ImageSharp.Processing.ResizeMode.Stretch.ToString()" />
+                            </MudToggleGroup>
+                        </MudItem>
+                        @if (model.MutateOptions.Mode == ResizeMode.Pad)
+                        {
+                            <MudItem xs="12">
+                                <MudText>Pad Color</MudText>
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudToggleGroup T="string" Value="@model.MutateOptions.PadColor" ValueChanged="OnPadColorChanged" Color="Color.Tertiary" FixedContent>
+                                    <MudToggleItem Value="SixLabors.ImageSharp.Color.Black.ToString()" Text="@(model.MutateOptions.InvertColors ? "White" : "Black")"></MudToggleItem>
+                                    <MudToggleItem Value="SixLabors.ImageSharp.Color.White.ToString()" Text="@(model.MutateOptions.InvertColors ? "Black" : "White")"></MudToggleItem>
+                                </MudToggleGroup>
+                            </MudItem>
+                        }
+                        <MudItem xs="12">
+                            <MudText>Resize Positioning</MudText>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudToggleGroup T="AnchorPositionMode" Value="@model.MutateOptions.Position" ValueChanged="OnPositionChanged" Color="Color.Primary" FixedContent>
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.AnchorPositionMode.Center">Center</MudToggleItem>
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.AnchorPositionMode.TopLeft">Top Left</MudToggleItem>
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.AnchorPositionMode.BottomLeft">Bottom Left</MudToggleItem>
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.AnchorPositionMode.TopRight">Top Right</MudToggleItem>
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.AnchorPositionMode.BottomRight">Bottom Right</MudToggleItem>
+                            </MudToggleGroup>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudText>Rotation Degrees</MudText>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudToggleGroup T="RotateMode" Value="@model.MutateOptions.RotateMode" ValueChanged="OnRotateModeChanged" Color="Color.Primary" FixedContent>
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.RotateMode.None">0</MudToggleItem>
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.RotateMode.Rotate90">90 Degrees</MudToggleItem>
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.RotateMode.Rotate180">180 Degrees</MudToggleItem>
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.RotateMode.Rotate270">270 Degrees</MudToggleItem>
+                            </MudToggleGroup>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudText>Flip Direction</MudText>
+                        </MudItem>
+                        <MudItem xs="12">
+                            <MudToggleGroup T="FlipMode" Value="@model.MutateOptions.FlipMode" ValueChanged="OnFlipModeChanged" Color="Color.Primary" FixedContent>
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.FlipMode.None">No flip</MudToggleItem>
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.FlipMode.Horizontal">Horizontal</MudToggleItem>
+                                <MudToggleItem Value="SixLabors.ImageSharp.Processing.FlipMode.Vertical">Vertical</MudToggleItem>
+                            </MudToggleGroup>
+                        </MudItem>
+                        <MudItem xs="3">
+                            <MudText>Invert Colors</MudText>
+                        </MudItem>
+                        <MudItem xs="9">
+                            <MudText>Dithering Algorithm</MudText>
+                        </MudItem>
+                        <MudItem xs="3">
+                            <MudToggleIconButton ToggledChanged="OnInvertColorsChanged" Toggled="@model.MutateOptions.InvertColors" Icon="@(model.MutateOptions.InvertColors ? Icons.Material.Filled.InvertColors : Icons.Material.Filled.InvertColorsOff)" Variant="Variant.Filled" ToggledColor="Color.Secondary" Color="Color.Default"></MudToggleIconButton>
+                        </MudItem>
+                        <MudItem xs="9">
+                            <MudSelect T="string" Value="@model.MutateOptions.DitheringAlglorithm" Text="Dithering Algorithms" ValueChanged="OnDitheringChanged">
+                                @foreach (var dither in PPImageMutateOptions.DitheringAlgorithms.Keys)
+                                {
+                                    <MudSelectItem Value="@dither">@(dither)</MudSelectItem>
+                                }
+                            </MudSelect>
+                        </MudItem>
+                    }
+
+                    @if (_showPreviews && model.RawData != null)
+                    {
+                        <MudItem xs="12">
+                            <MudDivider></MudDivider>
+                        </MudItem>
+                        <MudItem Class="d-flex justify-center" xs="12">
+                            <MudButton Disabled="model.MutateOptions.HasPremium" href="@(model.MutateOptions.HasPremium ? "" : "https://www.youtube.com/watch?v=dQw4w9WgXcQ")" StartIcon="@Icons.Material.Filled.WorkspacePremium" EndIcon="@Icons.Material.Filled.WorkspacePremium" Color="Color.Secondary" style="@(model.MutateOptions.HasPremium ? "" : "background-color:gold")" OnClick="OnPremiumClicked"><MudText Color="Color.Primary" Typo="Typo.button">@(model.MutateOptions.HasPremium ? "Thanks for paying the Troll Toll!" : "Get PREMIUM!\nGet Instant Refreshes for this Image!")</MudText></MudButton>
+                        </MudItem>
+                        <MudItem Class="d-flex justify-center" xs="12">
+                            <MudButton  Variant="Variant.Text" Disabled="_hasCurrentPreview" StartIcon="@Icons.Material.Filled.Refresh" Ripple="true" OnClick="RefreshPreviews">Refresh</MudButton>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudText Class="d-flex justify-center" Typo="Typo.subtitle2">Original Image</MudText>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <MudText Class="d-flex justify-center" Typo="Typo.subtitle2">Display Image</MudText>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <PPImagePreview @ref="_rawPreview" RawData="@model.RawData" ResizeOptions="@model.MutateOptions"></PPImagePreview>
+                        </MudItem>
+                        <MudItem xs="6">
+                            <PPImagePreview @ref="_displayPreview" EncodeForDisplay="true" RawData="@model.RawData" ResizeOptions="@model.MutateOptions"></PPImagePreview>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </MudPaper>
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="Cancel">Cancel</MudButton>
+            <MudButton Color="Color.Success" OnClick="Submit">Submit</MudButton>
+        </DialogActions>
+    </MudDialog>
+</MudForm>
+
+@code {
+    [CascadingParameter]
+    private IMudDialogInstance MudDialog { get; set; } = default!;
+
+    [Parameter]
+    public PPImage? Image { get; set; } = null;
+
+    private PPImageFormModelValidator ValidationRules = default!;
+
+    private MudForm form = default!;
+
+    private PPImageFormModel model = new PPImageFormModel();
+
+    private MudFileUpload<IBrowserFile> _fileUpload = default!;
+
+    private PPImagePreview _rawPreview = default!;
+    private PPImagePreview _displayPreview = default!;
+
+    private bool _hasCurrentPreview = false;
+    private bool _showAdvanced = true;
+    private bool _showPreviews = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Image != null)
+        {
+            model = new(Image);
+            ValidationRules = new();
+        }
+        else {
+            model = new PPImageFormModel();
+            ValidationRules = new(true);
+        }
+        await base.OnInitializedAsync();
+    }
+
+    private async Task Submit()
+    {
+        await form.Validate();
+        if (form.IsValid)
+        {
+            Image = await ImageService.AddOrUpdateImageAsync(model, regenerateDisplay: true);
+            MudDialog.Close<PPImage>(Image);
+        }
+    }
+
+    private async Task RefreshPreviews()
+    {
+        _hasCurrentPreview = true;
+        await _displayPreview.GeneratePreview();
+    }
+
+    private void Cancel() 
+    {
+        MudDialog.Cancel();
+    } 
+
+    private async Task OnResizeModeChanged(ResizeMode mode)
+    {
+        model.MutateOptions.Mode = mode;
+        if (model.MutateOptions.HasPremium)
+        {
+            await RefreshPreviews();
+        }
+        _hasCurrentPreview = false;
+    }
+
+    private async Task OnPadColorChanged(string padColor)
+    {
+        model.MutateOptions.PadColor = padColor;
+        if (model.MutateOptions.HasPremium)
+        {
+            await RefreshPreviews();
+        }
+        _hasCurrentPreview = false;
+    }
+
+    private async Task OnPositionChanged(AnchorPositionMode position)
+    {
+        model.MutateOptions.Position = position;
+        if (model.MutateOptions.HasPremium)
+        {
+            await RefreshPreviews();
+        }
+        _hasCurrentPreview = false;
+    }
+
+    private async Task OnRotateModeChanged(RotateMode rotate)
+    {
+        model.MutateOptions.RotateMode = rotate;
+        if (model.MutateOptions.HasPremium)
+        {
+            await RefreshPreviews();
+        }
+        _hasCurrentPreview = false;
+    }
+
+    private async Task OnFlipModeChanged(FlipMode flip)
+    {
+        model.MutateOptions.FlipMode = flip;
+        if (model.MutateOptions.HasPremium)
+        {
+            await RefreshPreviews();
+        }
+        _hasCurrentPreview = false;
+    }
+
+    private async Task OnInvertColorsChanged(bool invertColors)
+    {
+        model.MutateOptions.InvertColors = invertColors;
+        if (model.MutateOptions.HasPremium)
+        {
+            await RefreshPreviews();
+        }
+        _hasCurrentPreview = false;
+    }
+
+    private async Task OnUploadImage()
+    {
+        await form.Validate();
+
+        if (model.File != null)
+        {
+            _hasCurrentPreview = false;
+            using var stream = new MemoryStream();
+            using var readStream = model.File.OpenReadStream();
+            await readStream.CopyToAsync(stream);
+            model.RawData = stream.ToArray();
+        }
+    }
+
+    private async Task OnDitheringChanged(string dither)
+    {
+        model.MutateOptions.DitheringAlglorithm = dither;
+        if (model.MutateOptions.HasPremium)
+        {
+            await RefreshPreviews();
+        }
+        _hasCurrentPreview = false;
+    }
+
+    private async Task OnPremiumClicked() 
+    {
+        if (Image?.Id != null)
+        {
+            await ImageService.SavePremiumAsync(Image.Id);
+        }
+    }
+}

@@ -1,0 +1,20 @@
+﻿@page "/imageCollection"
+
+@using TOLED.Web.Data
+@using TOLED.Web.Services
+@using TOLED.Web.Components
+
+@inject IImageService ImageService
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Gutters="true">
+    <MudGrid>
+        <MudItem xs="12">
+            <ImageList></ImageList>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code
+{
+
+}

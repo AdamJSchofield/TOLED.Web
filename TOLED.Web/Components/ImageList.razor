@@ -1,0 +1,187 @@
+﻿@using System.Collections
+@using TOLED.Web.Data.Models
+@using TOLED.Web.Services
+@using TOLED.Web.Encoders;
+@using static TOLED.Web.Components.Pages.Home
+@inject IImageService ImageService
+@inject IDialogService DialogService
+
+@if(!_loading){
+    <MudPaper Class="pa-4" Elevation="2">
+        <MudGrid Class="d-flex">
+            <MudItem Class="d-inline-flex align-center justify-start py-8" xs="6">
+                <MudText Typo="Typo.h3" GutterBottom>Your Image Collection</MudText>
+            </MudItem>
+            <MudItem Class="d-inline-flex align-center justify-end py-4" xs="6">
+                <MudButton Color="Color.Success" StartIcon="@Icons.Material.Outlined.CloudUpload" OnClick="AddImage" Variant="Variant.Filled"><MudText>Add Image</MudText></MudButton>
+            </MudItem>
+            <MudItem xs="12">
+                <MudDivider DividerType="DividerType.FullWidth"></MudDivider>
+            </MudItem>
+            <MudItem xs="12">
+                <MudPaper Elevation="2">
+                    <MudTable Items="@_images" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@_loading" LoadingProgressColor="Color.Info">
+                        <HeaderContent>
+                            <MudTh>Name</MudTh>
+                            @if (_seeAdvanced)
+                            {
+                                <MudTh>Id</MudTh>
+                                <MudTh>Size</MudTh>
+                                <MudTh>Frames</MudTh>
+                            }
+                            <MudTh>Original Image</MudTh>
+                            <MudTh>Preview</MudTh>
+                            <MudTh>Edit</MudTh>
+                            <MudSwitch T="bool" ThumbIcon="@Icons.Material.Rounded.Settings" @bind-Value="_seeAdvanced"></MudSwitch>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd DataLabel="Name"><MudText Typo="Typo.h5">@context.Name</MudText></MudTd>
+                            @if (_seeAdvanced)
+                            {
+                                <MudTd DataLabel="Id"><MudText Typo="Typo.caption">@context.Id</MudText></MudTd>
+                                <MudTd DataLabel="Size"><MudText Typo="Typo.caption">@context.DisplayData.Length</MudText></MudTd>
+                                <MudTd DataLabel="Frames"><MudText Typo="Typo.caption">@context.Frames</MudText></MudTd>
+                            }
+
+                            <MudTd>
+                                <PPImagePreview ImageId="@context.Id" @ref="@RawPreviewRef" RawData="@context.RawData" ResizeOptions="@context.MutateOptions"></PPImagePreview>
+                            </MudTd>
+                            <MudTd>
+                                <PPImagePreview ImageId="@context.Id" @ref="@DisplayPreviewRef" EncodeForDisplay="true" RawData="@context.RawData" ResizeOptions="@context.MutateOptions"></PPImagePreview>
+                            </MudTd>
+                            <MudTd>
+                                <MudItem Class="d-flex align-center justify-space-evenly flex-row gap-4" xs="12">
+                                    <MudIconButton Ripple="true" DropShadow="true" Color="Color.Primary" Icon="@Icons.Material.Filled.Edit" Variant="Variant.Text" OnClick="@(async () => await EditImage(@context))"></MudIconButton>
+                                    <MudButton OnClick="@(async () => await SetActiveOnClickAsync(new ToggleActiveEventArgs(context.Id, context.IsActive)))">
+                                        @if (context.IsActive)
+                                        {
+                                            <MudText>Active</MudText>
+                                        }
+                                        <MudSwitch ThumbIcon="@Icons.Material.Filled.Favorite" ThumbIconColor="Color.Error" @bind-Value="@context.IsActive" Color="Color.Tertiary" />
+                                    </MudButton>
+                                    <MudIconButton Ripple="true" DropShadow="true" Color="Color.Secondary" Icon="@Icons.Material.Filled.Delete" Variant="Variant.Text" OnClick="@(async () => await DeleteOnClickAsync(@context.Id))"></MudIconButton>
+                                </MudItem>
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+}
+else {
+    <MudOverlay @ref="_loadingOverlay" @bind-Visible="_loading" DarkBackground="true" ZIndex="9999" AutoClose="true">
+        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+    </MudOverlay>
+}
+
+@code {
+    private List<PPImage> _images = new List<PPImage>();
+
+    private bool _loading = true;
+    private bool _seeAdvanced = false;
+
+    private MudOverlay _loadingOverlay = default!;
+
+    private Dictionary<int, PPImagePreview> _rawPreviews = new();
+    public PPImagePreview RawPreviewRef 
+    { 
+        set {
+            if (value.ImageId != null && !_displayPreviews.ContainsKey(value.ImageId.Value))
+            {
+                _rawPreviews.Add(value.ImageId.Value, value);
+            }
+        }
+    }
+    private Dictionary<int, PPImagePreview> _displayPreviews = new();
+    public PPImagePreview DisplayPreviewRef
+    {
+        set
+        {
+            if (value.ImageId != null && !_displayPreviews.ContainsKey(value.ImageId.Value))
+            {
+                _displayPreviews.Add(value.ImageId.Value, value);
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var newImages = await ImageService.GetImagesAsync();
+        _images = newImages.ToList();
+        await base.OnInitializedAsync();
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        _loading = false;
+        StateHasChanged();
+        base.OnAfterRender(firstRender);
+    }
+
+    private async Task RefreshImages()
+    {
+        _loading = true;
+        var newImages = await ImageService.GetImagesAsync();
+        _images = newImages.ToList();
+    }
+
+    private async Task EditImage(PPImage? image = null)
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+        var parameters = new DialogParameters();
+        parameters.Add("Image", image);
+
+        var dialog = await DialogService.ShowAsync<ImageDialog>("Edit Image", parameters, new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true });
+        var result = await dialog.Result;
+        if ((PPImage?)result?.Data != null)
+        {
+            var foundImage = _images.First(i => i.Id == ((PPImage)result.Data).Id);
+            foundImage = (PPImage)result.Data;
+            await _displayPreviews[foundImage.Id].GeneratePreview();
+            await _rawPreviews[foundImage.Id].GeneratePreview();
+        }
+    }
+
+    private async Task AddImage()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<ImageDialog>("Add Image", new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true });
+        var result = await dialog.Result;
+        if ((PPImage?)result?.Data != null)
+        {
+            _images.Add((PPImage)(result.Data));
+            StateHasChanged();
+        }
+    }
+
+    private async Task SetActiveOnClickAsync(ToggleActiveEventArgs args)
+    {
+        await ImageService.SetActiveImageAsync(args.Id, setActive: !args.IsActive);
+    }
+
+    private async Task DeleteOnClickAsync(int id)
+    {
+        if (await ImageService.DeleteImageAsync(id)){
+            var imageToRemove = _images.FirstOrDefault(i => i.Id == id);
+            if (imageToRemove != null){
+                _rawPreviews.Remove(id);
+                _displayPreviews.Remove(id);
+                _images.Remove(imageToRemove);
+                StateHasChanged();
+            }
+        }
+    }
+
+    public class ToggleActiveEventArgs : EventArgs
+    {
+        public int Id { get; set; }
+        public bool IsActive { get; set; }
+
+        public ToggleActiveEventArgs(int id, bool isActive)
+        {
+            Id = id;
+            IsActive = isActive;
+        }
+    }
+}

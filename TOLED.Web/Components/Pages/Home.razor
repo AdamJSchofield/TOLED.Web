@@ -1,0 +1,62 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+
+@inject AuthenticationStateProvider authStateProvider
+
+<PageTitle>Pumpkin Pi (Web) Project</PageTitle>
+
+<MudContainer>
+    <MudStack>
+        <MudPaper Class="pa-4" Elevation="1">
+            <AuthorizeView>
+                <Authorized>
+                    <MudText Typo="Typo.h3" GutterBottom="true">Welcome @(context?.User?.Identity?.Name ?? "You sneaky bastard, how did you get in here without a name?")!</MudText>
+                </Authorized>
+                <NotAuthorized>
+                    <MudText Typo="Typo.h3" GutterBottom="true">Welcome!</MudText>
+                </NotAuthorized>
+            </AuthorizeView>
+            <MudText GutterBottom="true" Class="mb-8">
+                Pumpkin Pi is a collection of open source projects based around web solutions for interacting with small microprocessor platforms like the ESP32 and Raspberry Pi.
+            </MudText>
+            <MudButton Href="/Account/Login"
+            Target="_blank"
+            Variant="Variant.Filled"
+            EndIcon="@Icons.Material.Filled.Login"
+            Color="Color.Secondary"
+            Disabled="@(_authState?.User?.Identity?.IsAuthenticated == true)">
+                Click here to login
+            </MudButton>
+            <MudButton Href="https://github.com/AdamJSchofield/TOLED"
+            Target="_blank"
+            Variant="Variant.Filled"
+            EndIcon="@Icons.Custom.Brands.GitHub"
+            Color="Color.Primary">
+                Learn more on Github
+            </MudButton>
+        </MudPaper>
+
+        <MudPaper class="pd-2 mb-8" Elevation="1">
+            <MudAlert Severity="Severity.Normal">
+                This project is under heavy development and is prone to frequent data wipes and changes. Any account information or images you create may be lost at any time. It is also free to use. None of your data will be sold or used for purposes other than those directly related to this service.
+            </MudAlert>    
+        </MudPaper>
+    </MudStack>
+</MudContainer>
+
+@code
+{
+    private AuthenticationState? _authState;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _authState = await authStateProvider.GetAuthenticationStateAsync();
+        await base.OnInitializedAsync();
+    }
+
+    private RenderFragment _text = new RenderFragment(builder =>
+    {
+        builder.AddContent(0, "This is a test");
+    });
+}
