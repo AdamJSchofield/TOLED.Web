@@ -9,7 +9,6 @@ namespace TOLED.Web.Data
     {
         public DbSet<PPImage> Images { get; set; }
         public DbSet<PPDevice> Devices { get; set; }
-        public DbSet<ImageCollection> ImageCollections { get; set; }
 
         private string DbPath { get; set; }
 

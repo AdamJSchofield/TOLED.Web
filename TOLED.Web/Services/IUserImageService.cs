@@ -6,24 +6,22 @@ using TOLED.Web.Forms;
 
 namespace TOLED.Web.Services
 {
-    public interface IImageService
+    public interface IUserImageService
     {
-        public Task<IEnumerable<PPImage>> GetImagesAsync();
-        public Task<PPImage> AddOrUpdateImageAsync(PPImageFormModel image, bool regenerateDisplay = false);
-        public Task<PPImage?> GetImageAsync(int id);
-        public Task SetActiveImageAsync(int id, bool setActive = true);
-        public Task<PPImage?> GetActiveImageAsync();
-        public Task<bool> DeleteImageAsync(int id);
+        public Task<ICollection<PPImage>> GetImagesForUserAsync(ApplicationUser owner);
+        public Task<PPImage> AddOrUpdateImageAsync(ApplicationUser owner, PPImageFormModel image, bool regenerateDisplay = false);
+        public Task<PPImage?> GetImageForUserAsync(ApplicationUser owner, int id);
+        public Task<bool> DeleteImageForUserAsync(ApplicationUser owner, int id);
         public Task SavePremiumAsync(int imageId);
     }
 
-    public class ImageService(ToledDbContext dbContext) : IImageService
+    public class UserImageService(ToledDbContext dbContext) : IUserImageService
     {
-        public async Task<IEnumerable<PPImage>> GetImagesAsync() => await dbContext.Images.ToListAsync();
+        public async Task<ICollection<PPImage>> GetImagesForUserAsync(ApplicationUser owner) => await dbContext.Images.Where(i => i.Owner == owner).ToListAsync();
 
-        public async Task<PPImage?> GetImageAsync(int id) => await dbContext.Images.FindAsync(id);
+        public async Task<PPImage?> GetImageForUserAsync(ApplicationUser owner, int id) => await dbContext.Images.FirstOrDefaultAsync(i => i.Owner == owner);
 
-        public async Task<PPImage> AddOrUpdateImageAsync(PPImageFormModel formModel, bool regenerateDisplay = false)
+        public async Task<PPImage> AddOrUpdateImageAsync(ApplicationUser owner, PPImageFormModel formModel, bool regenerateDisplay = false)
         {
             PPImage? image = null;
             var adding = false;
@@ -31,7 +29,7 @@ namespace TOLED.Web.Services
             // If the form model has an ID, we are updating an existing image
             if (formModel.Id != null)
             {
-                image = await dbContext.Images.FindAsync(formModel.Id);
+                image = await GetImageForUserAsync(owner, formModel.Id.Value);
             }
 
             // If the image is null, we are adding a new image
@@ -64,7 +62,10 @@ namespace TOLED.Web.Services
             // If the image is being added, add it to the database
             if (adding)
             {
-                image = await AddImageAsync(image);
+                image.Owner = owner;
+                var entry = await dbContext.Images.AddAsync(image);
+                await dbContext.SaveChangesAsync();
+                return entry.Entity;
             }
 
             await dbContext.SaveChangesAsync();
@@ -72,30 +73,10 @@ namespace TOLED.Web.Services
             return image;
         }
 
-        internal async Task<PPImage> AddImageAsync(PPImage image)
-        {
-            var addedImage = await dbContext.Images.AddAsync(image);
-            await dbContext.SaveChangesAsync();
-            return addedImage.Entity;
-        }
-
-        public async Task<PPImage?> GetActiveImageAsync() => await dbContext.Images.FirstOrDefaultAsync(x => x.IsActive);
-
-        public async Task SetActiveImageAsync(int id, bool setActive = true)
-        {
-            await dbContext.Images.Where(i => i.IsActive).ForEachAsync(i => i.IsActive = false);
-            var foundImage = await dbContext.Images.FindAsync(id);
-            if (foundImage != null)
-            {
-                foundImage.IsActive = true;
-                await dbContext.SaveChangesAsync();
-            }
-        }
-
-        public async Task<bool> DeleteImageAsync(int id)
+        public async Task<bool> DeleteImageForUserAsync(ApplicationUser owner, int id)
         {
             var changed = false;
-            var imageToDelete = dbContext.Images.Find(id);
+            var imageToDelete = await GetImageForUserAsync(owner, id);
             if (imageToDelete != null)
             {
                 dbContext.Images.Remove(imageToDelete);
@@ -116,6 +97,17 @@ namespace TOLED.Web.Services
             if (image != null)
             {
                 image.MutateOptions.HasPremium = true;
+                await dbContext.SaveChangesAsync();
+            }
+        }
+
+        public async Task SetActiveImageAsync(ApplicationUser user, int id, bool setActive = true)
+        {
+            await dbContext.Images.Where(i => i.IsActive).ForEachAsync(i => i.IsActive = false);
+            var foundImage = await dbContext.Images.FindAsync(id);
+            if (foundImage != null)
+            {
+                foundImage.IsActive = true;
                 await dbContext.SaveChangesAsync();
             }
         }

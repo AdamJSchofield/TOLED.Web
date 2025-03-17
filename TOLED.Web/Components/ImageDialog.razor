@@ -1,4 +1,5 @@
-﻿@using SixLabors.ImageSharp.Processing
+﻿@using Microsoft.AspNetCore.Identity
+@using SixLabors.ImageSharp.Processing
 @using SixLabors.ImageSharp.Processing.Processors.Dithering
 @using ResizeOptions = SixLabors.ImageSharp.Processing.ResizeOptions;
 @using ResizeMode = SixLabors.ImageSharp.Processing.ResizeMode;
@@ -7,7 +8,8 @@
 @using TOLED.Web.Data.Models;
 @using TOLED.Web.Components
 
-@inject IImageService ImageService
+@inject UserManager<ApplicationUser> UserManager
+@inject IUserImageService ImageService
 @inject ISnackbar Snackbar
 
 <MudForm Model="@model" @ref="@form" Validation="@(ValidationRules.ValidateValue)" ValidationDelay="0">
@@ -174,6 +176,10 @@
 </MudForm>
 
 @code {
+
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationState { get; set; } = default!;
+
     [CascadingParameter]
     private IMudDialogInstance MudDialog { get; set; } = default!;
 
@@ -181,6 +187,7 @@
     public PPImage? Image { get; set; } = null;
 
     private PPImageFormModelValidator ValidationRules = default!;
+    private ApplicationUser _user = default!;
 
     private MudForm form = default!;
 
@@ -197,6 +204,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        _user = await GetAuthenticatedUserAsync();
         if (Image != null)
         {
             model = new(Image);
@@ -209,12 +217,26 @@
         await base.OnInitializedAsync();
     }
 
+    private async Task<ApplicationUser> GetAuthenticatedUserAsync()
+    {
+        var principle = AuthenticationState.Result?.User;
+        if (principle != null)
+        {
+            var authenticatedUser = await UserManager.GetUserAsync(principle);
+            if (authenticatedUser != null)
+            {
+                return authenticatedUser;
+            }
+        }
+        throw new Exception("User not authenticated");
+    }
+
     private async Task Submit()
     {
         await form.Validate();
         if (form.IsValid)
         {
-            Image = await ImageService.AddOrUpdateImageAsync(model, regenerateDisplay: true);
+            Image = await ImageService.AddOrUpdateImageAsync(_user, model, regenerateDisplay: true);
             MudDialog.Close<PPImage>(Image);
         }
     }

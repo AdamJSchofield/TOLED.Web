@@ -9,6 +9,8 @@ namespace TOLED.Web.Data.Models
     public class PPImage
     {
         public int Id { get; set; }
+        public ApplicationUser Owner { get; set; } = default!;
+        public ICollection<ApplicationUser> Users { get; set; } = default!;
         public string Name { get; set; } = default!;
         public bool IsActive { get; set; } = false;
         public virtual byte[] RawData { get; set; } = default!;

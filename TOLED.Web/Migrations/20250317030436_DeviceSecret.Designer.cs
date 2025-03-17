@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TOLED.Web.Data;
 
@@ -10,9 +11,11 @@ using TOLED.Web.Data;
 namespace TOLED.Web.Migrations
 {
     [DbContext(typeof(ToledDbContext))]
-    partial class ToledDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250317030436_DeviceSecret")]
+    partial class DeviceSecret
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.3");

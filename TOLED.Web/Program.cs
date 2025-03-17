@@ -50,7 +50,8 @@ builder.Services.AddControllers();
 
 builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
 
-builder.Services.AddScoped<IImageService, ImageService>();
+builder.Services.AddScoped<IUserImageService, UserImageService>();
+builder.Services.AddScoped<IUserDeviceService, UserDeviceService>();
 
 //builder.Services.AddHealthChecks();
 

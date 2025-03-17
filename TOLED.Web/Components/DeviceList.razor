@@ -1,0 +1,123 @@
+﻿@using Microsoft.AspNetCore.Identity
+@using TOLED.Web.Data.Models
+@using TOLED.Web.Services
+
+@inject UserManager<ApplicationUser> UserManager
+@inject IUserDeviceService DeviceService
+
+<h3>Device List</h3>
+
+<MudGrid>
+    <MudItem xs="9">
+        <MudTextField T="string" Label="Device Name" @bind-Value="_registerDeviceName"></MudTextField>
+    </MudItem>
+    <MudItem xs="3">
+        <MudButton OnClick="OnRegisterNewDevice">Register New Device</MudButton>
+    </MudItem>
+    <MudItem xs="9">
+        <MudTextField T="string" Label="Invite Code" @bind-Value="_addDeviceId"></MudTextField>
+    </MudItem>
+    <MudItem xs="3">
+        <MudButton OnClick="OnAddDevice">Link Device</MudButton>
+    </MudItem>
+</MudGrid>
+
+<MudTable Items="@_devices" Hover="true" Breakpoint="Breakpoint.Sm" Loading="@_loading" LoadingProgressColor="Color.Info">
+    <HeaderContent>
+        <MudTh>Name</MudTh>
+        <MudTh>Status</MudTh>
+        <MudTh>Owner</MudTh>
+        <MudTh>Invite Code</MudTh>
+        <MudTh>Device Secret</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Name">
+            <MudText Typo="Typo.h5">@context.Name</MudText>
+        </MudTd>
+        <MudTd>
+            <MudChip T="string" Color="@(context.Status == PPDeviceStatus.Online ? Color.Success : Color.Error)"><MudText>@(context.Status == PPDeviceStatus.Online ? "Online" : "Offline")</MudText></MudChip>
+        </MudTd>
+        <MudTd>
+            <MudChip T="string" Color="@(context.Owner == _user ? Color.Success : Color.Surface)"><MudText>@(context.Owner == _user ? "You" : context.Owner.UserName)</MudText></MudChip>
+        </MudTd>
+        @if(context.Owner == _user)
+        {
+            <MudTd>
+                <MudText>@context.Id</MudText>
+            </MudTd>
+            <MudTd>
+                <MudText>@context.DeviceSecret</MudText>
+            </MudTd>
+        }
+    </RowTemplate>
+</MudTable>
+
+<MudOverlay @bind-Visible="_loading" DarkBackground="true" ZIndex="9999" AutoClose="true">
+    <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+</MudOverlay>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationState { get; set; } = default!;
+
+    private ApplicationUser _user = default!;
+    private ICollection<PPDevice> _devices = new List<PPDevice>();
+
+    private string _registerDeviceName = string.Empty;
+    private string _addDeviceId = string.Empty;
+
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _user = await GetAuthenticatedUserAsync();
+        _devices = await DeviceService.GetDevicesForUserAsync(_user);
+        await base.OnInitializedAsync();
+        _loading = false;
+    }
+
+    private async Task<ApplicationUser> GetAuthenticatedUserAsync()
+    {
+        var principle = AuthenticationState.Result?.User;
+        if (principle != null)
+        {
+            var authenticatedUser = await UserManager.GetUserAsync(principle);
+            if (authenticatedUser != null)
+            {
+                return authenticatedUser;
+            }
+        }
+        throw new Exception("User not authenticated");
+    }
+
+    private async Task OnRegisterNewDevice()
+    {
+        if (string.IsNullOrWhiteSpace(_registerDeviceName))
+        {
+            throw new Exception("Cannot enter empty name");
+        }
+
+        var registeredDevice = await DeviceService.RegisterNewDevice(_user, new PPDevice { Name = _registerDeviceName });
+        if (registeredDevice != null)
+        {
+            _devices.Add(registeredDevice);
+            _registerDeviceName = string.Empty;
+        }
+    }
+
+    private async Task OnAddDevice()
+    {
+        if (string.IsNullOrWhiteSpace(_addDeviceId))
+        {
+            throw new Exception("Cannot enter empty id");
+        }
+        var guidId = Guid.Parse(_addDeviceId);
+
+        var addedDevice = await DeviceService.AddUserToDevice(_user, guidId);
+        if (addedDevice != null && !_devices.Any(d => d.Id == guidId))
+        {
+            _devices.Add(addedDevice);
+            _registerDeviceName = string.Empty;
+        }
+    }
+}

@@ -1,10 +1,13 @@
 ﻿@using System.Collections
+@using Microsoft.AspNetCore.Identity
 @using TOLED.Web.Data.Models
 @using TOLED.Web.Services
 @using TOLED.Web.Encoders;
 @using static TOLED.Web.Components.Pages.Home
-@inject IImageService ImageService
+@inject IUserImageService ImageService
+@inject IUserDeviceService DeviceService
 @inject IDialogService DialogService
+@inject UserManager<ApplicationUser> UserManager
 
 @if(!_loading){
     <MudPaper Class="pa-4" Elevation="2">
@@ -13,7 +16,7 @@
                 <MudText Typo="Typo.h3" GutterBottom>Your Image Collection</MudText>
             </MudItem>
             <MudItem Class="d-inline-flex align-center justify-end py-4" xs="6">
-                <MudButton Color="Color.Success" StartIcon="@Icons.Material.Outlined.CloudUpload" OnClick="AddImage" Variant="Variant.Filled"><MudText>Add Image</MudText></MudButton>
+                <MudButton Color="Color.Success" StartIcon="@Icons.Material.Outlined.CloudUpload" OnClick="OnAddImage" Variant="Variant.Filled"><MudText>Add Image</MudText></MudButton>
             </MudItem>
             <MudItem xs="12">
                 <MudDivider DividerType="DividerType.FullWidth"></MudDivider>
@@ -50,16 +53,17 @@
                                 <PPImagePreview ImageId="@context.Id" @ref="@DisplayPreviewRef" EncodeForDisplay="true" RawData="@context.RawData" ResizeOptions="@context.MutateOptions"></PPImagePreview>
                             </MudTd>
                             <MudTd>
-                                <MudItem Class="d-flex align-center justify-space-evenly flex-row gap-4" xs="12">
-                                    <MudIconButton Ripple="true" DropShadow="true" Color="Color.Primary" Icon="@Icons.Material.Filled.Edit" Variant="Variant.Text" OnClick="@(async () => await EditImage(@context))"></MudIconButton>
-                                    <MudButton OnClick="@(async () => await SetActiveOnClickAsync(new ToggleActiveEventArgs(context.Id, context.IsActive)))">
-                                        @if (context.IsActive)
+                                <MudItem xs="12">
+                                    <MudSelect T="PPDevice" Label="Send to devices" MultiSelection="true" @bind-SelectedValues="_selectedDisplays">
+                                        @foreach (var device in _devices)
                                         {
-                                            <MudText>Active</MudText>
+                                            <MudSelectItem T="PPDevice" Value="@device">
+                                                <MudText>@device.Name</MudText>
+                                            </MudSelectItem>
                                         }
-                                        <MudSwitch ThumbIcon="@Icons.Material.Filled.Favorite" ThumbIconColor="Color.Error" @bind-Value="@context.IsActive" Color="Color.Tertiary" />
-                                    </MudButton>
-                                    <MudIconButton Ripple="true" DropShadow="true" Color="Color.Secondary" Icon="@Icons.Material.Filled.Delete" Variant="Variant.Text" OnClick="@(async () => await DeleteOnClickAsync(@context.Id))"></MudIconButton>
+                                    </MudSelect>
+                                    <MudButton Color="Color.Secondary" StartIcon="@Icons.Material.Outlined.Send" OnClick="@(async () => await OnSendToDevice(new ToggleActiveEventArgs(context.Id, true)))"></MudButton>
+                                    <MudIconButton Ripple="true" DropShadow="true" Color="Color.Secondary" Icon="@Icons.Material.Filled.Delete" Variant="Variant.Text" OnClick="@(async () => await OnDeleteAsync(@context.Id))"></MudIconButton>
                                 </MudItem>
                             </MudTd>
                         </RowTemplate>
@@ -70,18 +74,21 @@
     </MudPaper>
 }
 else {
-    <MudOverlay @ref="_loadingOverlay" @bind-Visible="_loading" DarkBackground="true" ZIndex="9999" AutoClose="true">
+    <MudOverlay @bind-Visible="_loading" DarkBackground="true" ZIndex="9999" AutoClose="true">
         <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
     </MudOverlay>
 }
 
 @code {
-    private List<PPImage> _images = new List<PPImage>();
+    [CascadingParameter]
+    private Task<AuthenticationState> AuthenticationState { get; set; } = default!;
 
+    private ApplicationUser _user = default!;
+    private ICollection<PPImage> _images = new List<PPImage>();
+    private ICollection<PPDevice> _devices = new List<PPDevice>();
     private bool _loading = true;
     private bool _seeAdvanced = false;
-
-    private MudOverlay _loadingOverlay = default!;
+    private IEnumerable<PPDevice> _selectedDisplays = new List<PPDevice>();
 
     private Dictionary<int, PPImagePreview> _rawPreviews = new();
     public PPImagePreview RawPreviewRef 
@@ -107,9 +114,22 @@ else {
 
     protected override async Task OnInitializedAsync()
     {
-        var newImages = await ImageService.GetImagesAsync();
-        _images = newImages.ToList();
+        _user = await GetAuthenticatedUserAsync();
+        _images = await ImageService.GetImagesForUserAsync(_user);
+        _devices = await DeviceService.GetDevicesForUserAsync(_user);
         await base.OnInitializedAsync();
+    }
+
+    private async Task<ApplicationUser> GetAuthenticatedUserAsync()
+    {
+        var principle = AuthenticationState.Result?.User;
+        if (principle != null){
+            var authenticatedUser = await UserManager.GetUserAsync(principle);
+            if (authenticatedUser != null){
+                return authenticatedUser;
+            }
+        }
+        throw new Exception("User not authenticated");
     }
 
     protected override void OnAfterRender(bool firstRender)
@@ -119,11 +139,11 @@ else {
         base.OnAfterRender(firstRender);
     }
 
-    private async Task RefreshImages()
+    private async Task OnRefreshImages()
     {
         _loading = true;
-        var newImages = await ImageService.GetImagesAsync();
-        _images = newImages.ToList();
+        _images = await ImageService.GetImagesForUserAsync(_user);
+        _loading = false;
     }
 
     private async Task EditImage(PPImage? image = null)
@@ -143,7 +163,7 @@ else {
         }
     }
 
-    private async Task AddImage()
+    private async Task OnAddImage()
     {
         var options = new DialogOptions { CloseOnEscapeKey = true };
         var dialog = await DialogService.ShowAsync<ImageDialog>("Add Image", new DialogOptions { MaxWidth = MaxWidth.Medium, FullWidth = true, CloseOnEscapeKey = true });
@@ -155,14 +175,14 @@ else {
         }
     }
 
-    private async Task SetActiveOnClickAsync(ToggleActiveEventArgs args)
+    private async Task OnSendToDevice(ToggleActiveEventArgs args)
     {
-        await ImageService.SetActiveImageAsync(args.Id, setActive: !args.IsActive);
+        //await ImageService.SetActiveImageAsync(args.Id, setActive: !args.IsActive);
     }
 
-    private async Task DeleteOnClickAsync(int id)
+    private async Task OnDeleteAsync(int id)
     {
-        if (await ImageService.DeleteImageAsync(id)){
+        if (await ImageService.DeleteImageForUserAsync(_user, id)){
             var imageToRemove = _images.FirstOrDefault(i => i.Id == id);
             if (imageToRemove != null){
                 _rawPreviews.Remove(id);
